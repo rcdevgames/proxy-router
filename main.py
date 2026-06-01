@@ -127,7 +127,6 @@ async def health():
 async def root():
     return {
         "name": "AI Proxy Router",
-        "endpoints": ["/v1/messages", "/v1/chat/completions"],
         "health": "/health"
     }
 
