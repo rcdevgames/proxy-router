@@ -8,6 +8,7 @@ from router import ProxyRouter
 app = FastAPI(title="AI Proxy Router")
 router = None
 proxy_api_key = None
+allowed_models = []
 
 
 def get_api_key(x_api_key: str = Header(None)) -> str:
@@ -21,26 +22,39 @@ def get_api_key(x_api_key: str = Header(None)) -> str:
 
 @app.on_event("startup")
 async def startup():
-    global router, proxy_api_key
+    global router, proxy_api_key, allowed_models
     settings = load_settings()
 
     # Load proxy API key
     proxy_api_key = settings.proxy_api_key or None
 
+    # Load allowed models untuk validasi
+    allowed_models = [m.strip() for m in settings.allowed_models.split(",") if m.strip()]
+
+    # Build priority list untuk cek model yang tersedia
+    from router import ProxyRouter
+    priority_models = []
+    if settings.konektika_api_key and settings.konektika_enabled:
+        priority_models.append(settings.konektika_model)
+    if settings.databyte_api_key and settings.databyte_enabled:
+        priority_models.append(settings.databyte_model)
+    if settings.glm_api_key and settings.glm_enabled:
+        priority_models.append(settings.glm_model)
+
     # Kalau tidak ada model aktif, stop service dengan exit code 1
-    models = settings.get_models()
-    if not models:
+    if not priority_models:
         print("\n[CRITICAL] Tidak ada model yang aktif!")
         print("Set setidaknya satu API key di .env untuk menjalankan proxy.\n")
         import os
         os._exit(1)
 
     router = ProxyRouter(settings)
-    print(f"\n[OK] Proxy router aktif dengan {len(router.models)} model:")
-    for m in router.models:
-        print(f"   - {m.model} ({m.base_url})")
+    print(f"\n[OK] Proxy router aktif dengan {len(router.models)} model (priority order):")
+    for i, m in enumerate(router.models, 1):
+        print(f"   {i}. {m.model} ({m.base_url})")
     if proxy_api_key:
         print(f"   [Auth] API key protection enabled")
+    print(f"   [Auth] Allowed models: {', '.join(allowed_models)}")
 
 
 @app.post("/v1/messages")
@@ -51,6 +65,14 @@ async def anthropic_messages(request: Request, _: str = Depends(get_api_key)):
 
     try:
         data = await request.json()
+
+        # Validasi model name dari client
+        requested_model = data.get("model", "")
+        if requested_model and requested_model not in allowed_models:
+            return Response(
+                content=f"Model '{requested_model}' tidak diizinkan. Allowed: {', '.join(allowed_models)}",
+                status_code=403
+            )
         is_anthropic_format = True
 
         if data.get("stream"):

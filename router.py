@@ -7,16 +7,57 @@ from config import Settings, ModelConfig
 class ProxyRouter:
     def __init__(self, settings: Settings):
         self.settings = settings
-        self.models = settings.get_models()
+        # Priority order: Konektika (1) -> DataByte (2) -> GLM (3)
+        self.models = self._build_priority_list(settings)
         self.current_index = 0
 
         if not self.models:
             raise ValueError("Tidak ada model yang tersedia. Set API key di .env")
 
+    def _build_priority_list(self, settings: Settings) -> list[ModelConfig]:
+        """Build priority-based model list: Konektika -> DataByte -> GLM"""
+        models = []
+
+        # Priority 1: Konektika
+        if settings.konektika_api_key and settings.konektika_enabled:
+            models.append(ModelConfig(
+                api_key=settings.konektika_api_key,
+                base_url=settings.konektika_base_url,
+                model=settings.konektika_model,
+                enabled=True,
+                supports_anthropic_format=False  # OpenAI format
+            ))
+
+        # Priority 2: DataByte
+        if settings.databyte_api_key and settings.databyte_enabled:
+            models.append(ModelConfig(
+                api_key=settings.databyte_api_key,
+                base_url=settings.databyte_base_url,
+                model=settings.databyte_model,
+                enabled=True,
+                supports_anthropic_format=True
+            ))
+
+        # Priority 3: GLM (fallback last resort)
+        if settings.glm_api_key and settings.glm_enabled:
+            models.append(ModelConfig(
+                api_key=settings.glm_api_key,
+                base_url=settings.glm_base_url,
+                model=settings.glm_model,
+                enabled=True,
+                supports_anthropic_format=True
+            ))
+
+        return models
+
     def _get_next_model(self) -> ModelConfig:
-        """Round-robin: ambil model berikutnya"""
+        """Priority-based: always try from start, failover to next"""
         if not self.models:
             raise ValueError("Tidak ada model yang tersedia")
+
+        # Reset to first (priority highest) on each request for retry
+        if self.current_index >= len(self.models):
+            self.current_index = 0
 
         model = self.models[self.current_index]
         self.current_index = (self.current_index + 1) % len(self.models)
