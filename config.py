@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     request_timeout: int = 30
     max_retries: int = 1
 
+    # Proxy authentication - required untuk akses
+    proxy_api_key: str = ""
+
     # Model 1: GLM
     glm_api_key: str = ""
     glm_base_url: str = "https://api.z.ai/api/anthropic"

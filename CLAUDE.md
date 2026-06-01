@@ -47,6 +47,10 @@ config.py        # Settings via pydantic_settings, model config loader
 | DataByte | Anthropic native | None |
 | Konektika | OpenAI | Transform request/response |
 
+## Authentication
+
+Semua endpoint kecuali `/health` butuh `X-Api-Key` header. Set `PROXY_API_KEY` di `.env`.
+
 ## Environment Variables
 
 Semua config via `.env` (bukan hardcode). Model di-disable kalau API key kosong.
@@ -55,7 +59,7 @@ Semua config via `.env` (bukan hardcode). Model di-disable kalau API key kosong.
 PORT=8080
 REQUEST_TIMEOUT=30
 MAX_RETRIES=1
-
+PROXY_API_KEY=          # Required untuk akses API
 GLM_API_KEY=
 DATABYTE_API_KEY=
 KONEKTIKA_API_KEY=
@@ -63,6 +67,6 @@ KONEKTIKA_API_KEY=
 
 ## Key Behavior
 
-- Startup: `ProxyRouter.__init__` raise `ValueError` kalau semua model unavailable → app startup gagal
-- Request: 503 response kalau `router is None`
+- Startup: exit code 1 kalau ga ada model aktif
+- Auth: 401 kalau `X-Api-Key` invalid/missing (kecuali `/health`)
 - Failover: `max_retries` × model count attempts sebelum throw exception
