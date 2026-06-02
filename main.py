@@ -158,23 +158,7 @@ async def health():
 @app.get("/")
 async def root():
     return {
-        "name": "AI Proxy Router",        def get_api_key(
-            x_api_key: str = Header(None),
-            authorization: str = Header(None)
-        ) -> str:
-            """Verify API key - accept X-Api-Key or Authorization: Bearer header"""
-            if not proxy_api_key:
-                return x_api_key or authorization
-            
-            if x_api_key and x_api_key == proxy_api_key:
-                return x_api_key
-            
-            if authorization and authorization.startswith("Bearer "):
-                token = authorization[7:]
-                if token == proxy_api_key:
-                    return token
-            
-            raise HTTPException(status_code=401, detail="Invalid API key")
+        "name": "AI Proxy Router",
         "health": "/health"
     }
 
