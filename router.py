@@ -241,22 +241,58 @@ class ProxyRouter:
         raise Exception(f"Semua model gagal setelah {len(tried_models)} percobaan")
 
     async def _handle_stream_request(self, data: dict, is_anthropic_format: bool) -> AsyncGenerator[str, None]:
-        """Handle streaming request dengan failover"""
-        tried_models = []
-
-        for _ in range(len(self.models) * self.settings.max_retries):
-            model = self._get_next_model()
-
-            if len(tried_models) >= len(self.models):
-                break
-
+        """Handle streaming request: coba stream → retry non-streaming → failover ke model lain"""
+        all_models = self.models.copy()
+        current_idx = 0
+        
+        while current_idx < len(all_models):
+            model = all_models[current_idx]
+            provider_name = "Konektika" if "konektika" in model.base_url.lower() else \
+                            "DataByte" if "databyte" in model.base_url.lower() else \
+                            "GLM" if "glm" in model.base_url.lower() else model.base_url
+            
+            # Step 1: Coba streaming dulu
+            print(f"[ROUTING] {provider_name} -> {model.model} (STREAM)")
             try:
                 async for chunk in self._stream_model(model, data, is_anthropic_format):
                     yield chunk
                 return  # Success
-            except (httpx.TimeoutException, httpx.HTTPStatusError) as e:
-                tried_models.append(model.model)
-                print(f"[WARNING] Model {model.model} stream gagal: {type(e).__name__}")
-                continue
-
-        raise Exception(f"Semua model stream gagal setelah {len(tried_models)} percobaan")
+            except Exception as stream_err:
+                err_detail = str(stream_err)[:150]
+                print(f"[WARNING] Stream {model.model} gagal: {type(stream_err).__name__} - {err_detail}")
+            
+            # Step 2: Stream gagal → retry model yang sama tapi non-streaming
+            print(f"[ROUTING] {provider_name} -> {model.model} (RETRY NON-STREAM)")
+            try:
+                result = await self._call_model(model, data, is_anthropic_format)
+                # Convert non-stream response ke stream format
+                if isinstance(result, dict) and result.get("type") == "message":
+                    # Anthropic format
+                    content = result.get("content", "")
+                    chunk_data = {
+                        "type": "content_block_delta",
+                        "index": 0,
+                        "delta": {"type": "text_delta", "text": content}
+                    }
+                    yield json.dumps(chunk_data)
+                    yield "data: {\"type\": \"message_stop\"}\n\n"
+                elif isinstance(result, dict) and result.get("choices"):
+                    # OpenAI format
+                    content = result["choices"][0]["message"]["content"]
+                    chunk_data = {
+                        "type": "content_block_delta",
+                        "index": 0,
+                        "delta": {"type": "text_delta", "text": content}
+                    }
+                    yield json.dumps(chunk_data)
+                    yield "data: {\"type\": \"message_stop\"}\n\n"
+                return  # Success
+            except Exception as non_stream_err:
+                err_detail = str(non_stream_err)[:150]
+                print(f"[WARNING] Non-stream {model.model} juga gagal: {type(non_stream_err).__name__} - {err_detail}")
+            
+            # Step 3: Gagal total → failover ke model berikutnya
+            current_idx += 1
+            continue
+        
+        raise Exception("Semua model gagal setelah coba stream dan non-stream")
