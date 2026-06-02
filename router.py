@@ -128,11 +128,13 @@ class ProxyRouter:
         
         url = f"{model.base_url}/messages" if model.supports_anthropic_format else f"{model.base_url}/chat/completions"
         print(f"[ROUTING] {provider_name} -> {model.model} ({url})")
+        print(f"[DEBUG] Request model field: '{body.get('model', 'NOT SET')}'")
 
         # Prepare request body
         if model.supports_anthropic_format:
             body = data.copy()
             body["model"] = model.model
+            print(f"[DEBUG] Sending to {provider_name}: model='{model.model}'")
             # Hapus parameter yang tidak didukung
             for key in ["stream_options"]:
                 body.pop(key, None)
@@ -140,6 +142,7 @@ class ProxyRouter:
             # OpenAI format
             body = self._transform_to_openai(data)
             body["model"] = model.model
+            print(f"[DEBUG] Sending to {provider_name}: model='{model.model}'")
             # Hapus parameter yang tidak didukung untuk Konektika
             for key in ["temperature", "top_k", "top_p", "seed"]:
                 body.pop(key, None)
@@ -183,6 +186,8 @@ class ProxyRouter:
         body = data.copy() if model.supports_anthropic_format else self._transform_to_openai(data)
         body["model"] = model.model
         body["stream"] = True
+        
+        print(f"[DEBUG] Sending to {provider_name}: model='{model.model}', stream=True")
 
         # Hapus parameter yang tidak didukung
         if not model.supports_anthropic_format:

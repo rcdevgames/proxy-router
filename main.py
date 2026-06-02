@@ -32,24 +32,29 @@ def get_api_key(
 
 @app.on_event("startup")
 async def startup():
-    global router, proxy_api_key, allowed_model_name
+    global router, proxy_api_key, allowed_model_name, valid_model_names
     settings = load_settings()
 
     # Load proxy API key
     proxy_api_key = settings.proxy_api_key or None
 
-    # Load exposed model name
-    allowed_model_name = settings.model_name
-
     # Build priority list untuk cek model yang tersedia
     from router import ProxyRouter
     priority_models = []
+    valid_model_names = []  # Semua model name yang valid
+    
     if settings.konektika_api_key and settings.konektika_enabled:
         priority_models.append("Konektika")
+        valid_model_names.append(settings.konektika_model)
     if settings.databyte_api_key and settings.databyte_enabled:
         priority_models.append("DataByte")
+        valid_model_names.append(settings.databyte_model)
     if settings.glm_api_key and settings.glm_enabled:
         priority_models.append("GLM")
+        valid_model_names.append(settings.glm_model)
+
+    # Gunakan model name pertama sebagai exposed/default
+    allowed_model_name = valid_model_names[0] if valid_model_names else "WAW-SUPER"
 
     # Kalau tidak ada model aktif, stop service dengan exit code 1
     if not priority_models:
@@ -60,8 +65,8 @@ async def startup():
 
     router = ProxyRouter(settings)
     print(f"\n[OK] Proxy router aktif:")
-    print(f"   Model name: {allowed_model_name}")
-    print(f"   Priority: {', '.join(m.model for m in router.models)}")
+    print(f"   Valid model names: {', '.join(valid_model_names)}")
+    print(f"   Priority: {', '.join(priority_models)}")
     if proxy_api_key:
         print(f"   [Auth] API key protection enabled")
 
@@ -75,11 +80,11 @@ async def anthropic_messages(request: Request, _: str = Depends(get_api_key)):
     try:
         data = await request.json()
 
-        # Validasi model name - HARUS exact match dengan exposed model name
+        # Validasi model name - harus match dengan salah satu model yang dikonfigurasi
         requested_model = data.get("model", "")
-        if requested_model and requested_model != allowed_model_name:
+        if requested_model and requested_model not in valid_model_names:
             return Response(
-                content=f"Bad Request: model '{requested_model}' tidak tersedia. Gunakan model name yang正确.",
+                content=f"Bad Request: model '{requested_model}' tidak tersedia. Gunakan salah satu: {', '.join(valid_model_names)}.",
                 status_code=400
             )
 
