@@ -223,9 +223,9 @@ class ProxyRouter:
                                     data_str = json.dumps(chunk)
                                 except:
                                     pass
-                        yield data_str
-                    elif line:
-                        yield line
+                            yield data_str
+                        elif line:
+                            yield line
             except httpx.HTTPStatusError as e:
                 error_body = e.response.text[:500]
                 print(f"[ERROR] {provider_name} stream HTTP {e.response.status_code}: {error_body}")
