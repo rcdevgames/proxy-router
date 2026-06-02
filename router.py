@@ -7,6 +7,7 @@ from config import Settings, ModelConfig
 class ProxyRouter:
     def __init__(self, settings: Settings):
         self.settings = settings
+        self.exposed_model_name = settings.model_name
         # Priority order: Konektika (1) -> DataByte (2) -> GLM (3)
         self.models = self._build_priority_list(settings)
         self.current_index = 0
@@ -96,7 +97,7 @@ class ProxyRouter:
                 "role": "assistant",
                 "content": content,
                 "id": response_data.get("id", "msg_xxx"),
-                "model": response_data.get("model", ""),
+                "model": self.exposed_model_name,  # Use exposed name
                 "stop_reason": response_data.get("choices", [{}])[0].get("finish_reason", "end_turn"),
                 "stop_sequence": None,
                 "usage": {
@@ -146,6 +147,9 @@ class ProxyRouter:
             if not model.supports_anthropic_format and is_anthropic_format:
                 result = self._transform_from_openai(result, "anthropic")
 
+            # Override model name dengan exposed name
+            result["model"] = self.exposed_model_name
+
             return result
 
     async def _stream_model(
@@ -179,7 +183,18 @@ class ProxyRouter:
                 response.raise_for_status()
                 async for line in response.aiter_lines():
                     if line.startswith("data: "):
-                        yield line[6:]  # Remove "data: " prefix
+                        data_str = line[6:]
+                        # Override model name di stream chunk
+                        if data_str and data_str not in ("[DONE]", ""):
+                            try:
+                                import json
+                                chunk = json.loads(data_str)
+                                if "model" in chunk:
+                                    chunk["model"] = self.exposed_model_name
+                                data_str = json.dumps(chunk)
+                            except:
+                                pass
+                        yield data_str
                     elif line:
                         yield line
 

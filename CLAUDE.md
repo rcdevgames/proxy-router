@@ -51,7 +51,7 @@ config.py        # Settings via pydantic_settings, model config loader
 
 Semua endpoint kecuali `/health` butuh `X-Api-Key` header. Set `PROXY_API_KEY` di `.env`.
 
-Model validation: client submit model name, proxy validasi against `ALLOWED_MODELS` (formalitas, proxy route pakai priority order bukan model dari client).
+Model validation: client HARUS submit `model` yang MATCH dengan `MODEL_NAME` di `.env`. Kalau tidak match → 400 Bad Request.
 
 ## Environment Variables
 
@@ -60,7 +60,7 @@ PORT=8080
 REQUEST_TIMEOUT=30
 MAX_RETRIES=1
 PROXY_API_KEY=           # Required untuk akses API
-ALLOWED_MODELS=databyte-m1,kimi-pro,GLM-4.7  # Validation only
+MODEL_NAME=WAW-SUPER      # Exposed name, client harus pakai ini
 
 # Model Priority (1-3): Konektika -> DataByte -> GLM
 KONEKTIKA_API_KEY=
@@ -73,4 +73,4 @@ GLM_API_KEY=
 - Startup: exit code 1 kalau ga ada model aktif
 - Routing: always try highest priority first, fallback on failure
 - Auth: 401 kalau `X-Api-Key` invalid/missing (kecuali `/health`)
-- Model validation: 403 kalau model tidak ada di `ALLOWED_MODELS`
+- Model validation: 400 kalau model tidak match `MODEL_NAME`

@@ -19,8 +19,8 @@ class Settings(BaseSettings):
     # Proxy authentication - required untuk akses
     proxy_api_key: str = ""
 
-    # Allowed model names (submitted by client for validation)
-    allowed_models: str = "databyte-m1,kimi-pro,GLM-4.7"  # comma-separated
+    # Model name yang di-expose ke client (HARUS exact match)
+    model_name: str = "WAW-SUPER"
 
     # Model 1: Konektika (Priority 1)
     konektika_api_key: str = ""
