@@ -104,8 +104,8 @@ async def anthropic_messages(request: Request, _: str = Depends(get_api_key)):
                 }
             )
         else:
-            result = await router.handle_request(data, is_anthropic_format)
-            return result
+            async for result in router.handle_request(data, is_anthropic_format):
+                return result
 
     except Exception as e:
         return Response(content=str(e), status_code=500)
@@ -139,8 +139,8 @@ async def chat_completions(request: Request, _: str = Depends(get_api_key)):
                 }
             )
         else:
-            result = await router.handle_request(data, is_anthropic_format)
-            return result
+            async for result in router.handle_request(data, is_anthropic_format):
+                return result
 
     except Exception as e:
         return Response(content=str(e), status_code=500)

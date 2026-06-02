@@ -219,7 +219,7 @@ class ProxyRouter:
                 yield chunk
             return
 
-        # Non-streaming request
+        # Non-streaming request - collect result then yield
         tried_models = []
 
         for _ in range(len(self.models) * self.settings.max_retries):
@@ -230,7 +230,9 @@ class ProxyRouter:
                 break
 
             try:
-                return await self._call_model(model, data, is_anthropic_format)
+                result = await self._call_model(model, data, is_anthropic_format)
+                yield result
+                return
             except (httpx.TimeoutException, httpx.HTTPStatusError) as e:
                 tried_models.append(model.model)
                 print(f"[WARNING] Model {model.model} gagal: {type(e).__name__}")
