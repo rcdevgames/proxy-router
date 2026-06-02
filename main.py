@@ -51,7 +51,7 @@ async def startup():
     router = ProxyRouter(settings)
     print(f"\n[OK] Proxy router aktif:")
     print(f"   Model name: {allowed_model_name}")
-    print(f"   Priority: {', '.join(router.models)}")
+    print(f"   Priority: {', '.join(m.model for m in router.models)}")
     if proxy_api_key:
         print(f"   [Auth] API key protection enabled")
 
