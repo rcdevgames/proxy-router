@@ -121,7 +121,13 @@ class ProxyRouter:
 
         timeout = httpx.Timeout(self.settings.request_timeout, connect=10.0)
 
+        # Tentukan provider name untuk logging
+        provider_name = "Konektika" if "konektika" in model.base_url.lower() else \
+                        "DataByte" if "databyte" in model.base_url.lower() else \
+                        "GLM" if "glm" in model.base_url.lower() else model.base_url
+        
         url = f"{model.base_url}/messages" if model.supports_anthropic_format else f"{model.base_url}/chat/completions"
+        print(f"[ROUTING] {provider_name} -> {model.model} ({url})")
 
         # Prepare request body
         if model.supports_anthropic_format:
@@ -166,6 +172,13 @@ class ProxyRouter:
 
         timeout = httpx.Timeout(self.settings.request_timeout, connect=10.0)
 
+        # Tentukan provider name untuk logging
+        provider_name = "Konektika" if "konektika" in model.base_url.lower() else \
+                        "DataByte" if "databyte" in model.base_url.lower() else \
+                        "GLM" if "glm" in model.base_url.lower() else model.base_url
+        
+        print(f"[ROUTING] {provider_name} -> {model.model} (STREAM)")
+
         url = f"{model.base_url}/messages" if model.supports_anthropic_format else f"{model.base_url}/chat/completions"
         body = data.copy() if model.supports_anthropic_format else self._transform_to_openai(data)
         body["model"] = model.model
@@ -201,7 +214,10 @@ class ProxyRouter:
     async def handle_request(self, data: dict, is_anthropic_format: bool):
         """Handle request dengan round-robin dan retry"""
         if data.get("stream"):
-            return self._handle_stream_request(data, is_anthropic_format)
+            # Use yield from for async generator
+            async for chunk in self._handle_stream_request(data, is_anthropic_format):
+                yield chunk
+            return
 
         # Non-streaming request
         tried_models = []
