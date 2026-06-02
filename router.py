@@ -148,9 +148,16 @@ class ProxyRouter:
                 body.pop(key, None)
 
         async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(url, json=body, headers=headers)
-            response.raise_for_status()
-            result = response.json()
+            try:
+                response = await client.post(url, json=body, headers=headers)
+                print(f"[DEBUG] {provider_name} response status: {response.status_code}")
+                response.raise_for_status()
+                result = response.json()
+                print(f"[DEBUG] {provider_name} response keys: {list(result.keys())}")
+            except httpx.HTTPStatusError as e:
+                error_body = e.response.text[:500]
+                print(f"[ERROR] {provider_name} HTTP {e.response.status_code}: {error_body}")
+                raise
 
             # Transform response kalau perlu
             if not model.supports_anthropic_format and is_anthropic_format:
@@ -188,6 +195,8 @@ class ProxyRouter:
         body["stream"] = True
         
         print(f"[DEBUG] Sending to {provider_name}: model='{model.model}', stream=True")
+        print(f"[DEBUG] Request body keys: {list(body.keys())}")
+        print(f"[DEBUG] Messages count: {len(body.get('messages', []))}")
 
         # Hapus parameter yang tidak didukung
         if not model.supports_anthropic_format:
@@ -197,24 +206,30 @@ class ProxyRouter:
             body.pop("stream_options", None)
 
         async with httpx.AsyncClient(timeout=timeout) as client:
-            async with client.stream("POST", url, json=body, headers=headers) as response:
-                response.raise_for_status()
-                async for line in response.aiter_lines():
-                    if line.startswith("data: "):
-                        data_str = line[6:]
-                        # Override model name di stream chunk
-                        if data_str and data_str not in ("[DONE]", ""):
-                            try:
-                                import json
-                                chunk = json.loads(data_str)
-                                if "model" in chunk:
-                                    chunk["model"] = self.exposed_model_name
-                                data_str = json.dumps(chunk)
-                            except:
-                                pass
+            try:
+                async with client.stream("POST", url, json=body, headers=headers) as response:
+                    print(f"[DEBUG] {provider_name} stream response status: {response.status_code}")
+                    response.raise_for_status()
+                    async for line in response.aiter_lines():
+                        if line.startswith("data: "):
+                            data_str = line[6:]
+                            # Override model name di stream chunk
+                            if data_str and data_str not in ("[DONE]", ""):
+                                try:
+                                    import json
+                                    chunk = json.loads(data_str)
+                                    if "model" in chunk:
+                                        chunk["model"] = self.exposed_model_name
+                                    data_str = json.dumps(chunk)
+                                except:
+                                    pass
                         yield data_str
                     elif line:
                         yield line
+            except httpx.HTTPStatusError as e:
+                error_body = e.response.text[:500]
+                print(f"[ERROR] {provider_name} stream HTTP {e.response.status_code}: {error_body}")
+                raise
 
     async def handle_request(self, data: dict, is_anthropic_format: bool):
         """Handle request dengan round-robin dan retry"""
@@ -262,6 +277,8 @@ class ProxyRouter:
                 async for chunk in self._stream_model(model, data, is_anthropic_format):
                     yield chunk
                 return  # Success
+            except httpx.HTTPStatusError as e:
+                print(f"[WARNING] Stream {model.model} HTTP {e.response.status_code}: {e.response.text[:200]}")
             except Exception as stream_err:
                 err_detail = str(stream_err)[:150]
                 print(f"[WARNING] Stream {model.model} gagal: {type(stream_err).__name__} - {err_detail}")
